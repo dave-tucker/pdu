@@ -49,7 +49,7 @@ impl<'a> TcpPdu<'a> {
     /// Constructs a [`TcpPdu`] backed by the provided `buffer`
     pub fn new(buffer: &'a [u8]) -> Result<Self> {
         let pdu = TcpPdu { buffer };
-        if buffer.len() < 20 || buffer.len() < pdu.computed_data_offset() {
+        if buffer.len() < 20 || buffer.len() < pdu.computed_data_offset()? {
             return Err(Error::Truncated);
         }
         Ok(pdu)
@@ -73,7 +73,7 @@ impl<'a> TcpPdu<'a> {
 
     /// Consumes this object and returns the slice of the underlying buffer that contains the header part of this PDU
     pub fn into_bytes(self) -> &'a [u8] {
-        &self.buffer[0..self.computed_data_offset()]
+        &self.buffer[0..self.computed_data_offset().unwrap()]
     }
 
     /// Returns an object representing the inner payload of this PDU
@@ -83,109 +83,141 @@ impl<'a> TcpPdu<'a> {
 
     /// Consumes this object and returns an object representing the inner payload of this PDU
     pub fn into_inner(self) -> Result<Tcp<'a>> {
-        let rest = &self.buffer[self.computed_data_offset()..];
+        let rest = &self.buffer[self.computed_data_offset().unwrap()..];
         Ok(Tcp::Raw(rest))
     }
 
-    pub fn source_port(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[0..=1].try_into().unwrap())
+    pub fn source_port(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 0)
     }
 
-    pub fn destination_port(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[2..=3].try_into().unwrap())
+    pub fn destination_port(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 2)
     }
 
-    pub fn sequence_number(&'a self) -> u32 {
-        u32::from_be_bytes(self.buffer[4..=7].try_into().unwrap())
+    pub fn sequence_number(&'a self) -> Result<u32> {
+        util::read_u32(self.buffer, 4)
     }
 
-    pub fn acknowledgement_number(&'a self) -> u32 {
-        u32::from_be_bytes(self.buffer[8..=11].try_into().unwrap())
+    pub fn acknowledgement_number(&'a self) -> Result<u32> {
+        util::read_u32(self.buffer, 8)
     }
 
-    pub fn data_offset(&'a self) -> u8 {
-        self.buffer[12] >> 4
+    pub fn data_offset(&'a self) -> Result<u8> {
+        Ok(util::read_u8(self.buffer, 12)? >> 4)
     }
 
-    pub fn computed_data_offset(&'a self) -> usize {
-        self.data_offset() as usize * 4
+    pub fn computed_data_offset(&'a self) -> Result<usize> {
+        Ok(self.data_offset()? as usize * 4)
     }
 
-    pub fn flags(&'a self) -> u8 {
-        self.buffer[13]
+    pub fn flags(&'a self) -> Result<u8> {
+        util::read_u8(self.buffer, 13)
     }
 
     pub fn fin(&'a self) -> bool {
-        self.flags() & 0x1 != 0
-    }
-
-    pub fn syn(&'a self) -> bool {
-        self.flags() & 0x2 != 0
-    }
-
-    pub fn rst(&'a self) -> bool {
-        self.flags() & 0x4 != 0
-    }
-
-    pub fn psh(&'a self) -> bool {
-        self.flags() & 0x8 != 0
-    }
-
-    pub fn ack(&'a self) -> bool {
-        self.flags() & 0x10 != 0
-    }
-
-    pub fn urg(&'a self) -> bool {
-        self.flags() & 0x20 != 0
-    }
-
-    pub fn ecn(&'a self) -> bool {
-        self.flags() & 0x40 != 0
-    }
-
-    pub fn cwr(&'a self) -> bool {
-        self.flags() & 0x80 != 0
-    }
-
-    pub fn window_size(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[14..=15].try_into().unwrap())
-    }
-
-    pub fn computed_window_size(&'a self, shift: u8) -> u32 {
-        (self.window_size() as u32) << (shift as u32)
-    }
-
-    pub fn checksum(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[16..=17].try_into().unwrap())
-    }
-
-    pub fn computed_checksum(&'a self, ip: &crate::Ip) -> u16 {
-        match ip {
-            crate::Ip::Ipv4(ipv4) => util::checksum(&[
-                &ipv4.source_address().as_ref(),
-                &ipv4.destination_address().as_ref(),
-                &[0x00, ipv4.protocol()].as_ref(),
-                &(ipv4.total_length() as usize - ipv4.computed_ihl()).to_be_bytes().as_ref(),
-                &self.buffer[0..=15],
-                &self.buffer[18..],
-            ]),
-            crate::Ip::Ipv6(ipv6) => util::checksum(&[
-                &ipv6.source_address().as_ref(),
-                &ipv6.destination_address().as_ref(),
-                &(ipv6.payload_length() as u32).to_be_bytes().as_ref(),
-                &[0x0, 0x0, 0x0, ipv6.computed_protocol()].as_ref(),
-                &self.buffer[0..=15],
-                &self.buffer[18..],
-            ]),
+        if let Ok(flags) = self.flags() {
+            flags & 0x1 != 0
+        } else {
+            false
         }
     }
 
-    pub fn urgent_pointer(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[18..=19].try_into().unwrap())
+    pub fn syn(&'a self) -> bool {
+        if let Ok(flags) = self.flags() {
+            flags & 0x2 != 0
+        } else {
+            false
+        }
+    }
+
+    pub fn rst(&'a self) -> bool {
+        if let Ok(flags) = self.flags() {
+            flags & 0x4 != 0
+        } else {
+            false
+        }
+    }
+
+    pub fn psh(&'a self) -> bool {
+        if let Ok(flags) = self.flags() {
+            flags & 0x8 != 0
+        } else {
+            false
+        }
+    }
+
+    pub fn ack(&'a self) -> bool {
+        if let Ok(flags) = self.flags() {
+            flags & 0x10 != 0
+        } else {
+            false
+        }
+    }
+
+    pub fn urg(&'a self) -> bool {
+        if let Ok(flags) = self.flags() {
+            flags & 0x20 != 0
+        } else {
+            false
+        }
+    }
+
+    pub fn ecn(&'a self) -> bool {
+        if let Ok(flags) = self.flags() {
+            flags & 0x40 != 0
+        } else {
+            false
+        }
+    }
+
+    pub fn cwr(&'a self) -> bool {
+        if let Ok(flags) = self.flags() {
+            flags & 0x80 != 0
+        } else {
+            false
+        }
+    }
+
+    pub fn window_size(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 14)
+    }
+
+    pub fn computed_window_size(&'a self, shift: u8) -> Result<u32> {
+        Ok((self.window_size()? as u32) << (shift as u32))
+    }
+
+    pub fn checksum(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 16)
+    }
+
+    pub fn computed_checksum(&'a self, ip: &crate::Ip) -> Result<u16> {
+        match ip {
+            crate::Ip::Ipv4(ipv4) => Ok(util::checksum(&[
+                &ipv4.source_address()?.as_ref(),
+                &ipv4.destination_address()?.as_ref(),
+                &[0x00, ipv4.protocol()?].as_ref(),
+                &(ipv4.total_length()? as usize - ipv4.computed_ihl()?).to_be_bytes().as_ref(),
+                &util::read_slice_inclusive(self.buffer, 0, 15)?,
+                &util::read_slice_after(self.buffer, 18)?,
+            ])),
+            crate::Ip::Ipv6(ipv6) => Ok(util::checksum(&[
+                &ipv6.source_address()?.as_ref(),
+                &ipv6.destination_address()?.as_ref(),
+                &(ipv6.payload_length()? as u32).to_be_bytes().as_ref(),
+                &[0x0, 0x0, 0x0, ipv6.computed_protocol()?].as_ref(),
+                &util::read_slice_inclusive(self.buffer, 0, 15)?,
+                &util::read_slice_after(self.buffer, 18)?,
+            ])),
+        }
+    }
+
+    pub fn urgent_pointer(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 18)
     }
 
     pub fn options(&'a self) -> TcpOptionIterator<'a> {
-        TcpOptionIterator { buffer: self.buffer, pos: 20, data_offset: self.computed_data_offset() }
+        TcpOptionIterator { buffer: self.buffer, pos: 20, data_offset: self.computed_data_offset().unwrap() }
     }
 }
 

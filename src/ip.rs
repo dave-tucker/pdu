@@ -16,8 +16,6 @@
    SPDX-License-Identifier: Apache-2.0
 */
 
-use core::convert::TryInto;
-
 use crate::{util, Error, Result};
 
 /// Provides constants representing various IP protocol numbers supported by this crate
@@ -71,13 +69,13 @@ impl<'a> Ipv4Pdu<'a> {
     /// Constructs an [`Ipv4Pdu`] backed by the provided `buffer`
     pub fn new(buffer: &'a [u8]) -> Result<Self> {
         let pdu = Ipv4Pdu { buffer };
-        if buffer.len() < 20 || pdu.computed_ihl() < 20 {
+        if buffer.len() < 20 || pdu.computed_ihl()? < 20 {
             return Err(Error::Truncated);
         }
-        if buffer.len() < (pdu.computed_ihl() as usize) || (pdu.total_length() as usize) < pdu.computed_ihl() {
+        if buffer.len() < (pdu.computed_ihl()? as usize) || (pdu.total_length()? as usize) < pdu.computed_ihl()? {
             return Err(Error::Malformed);
         }
-        if pdu.version() != 4 {
+        if pdu.version()? != 4 {
             return Err(Error::Malformed);
         }
         Ok(pdu)
@@ -101,7 +99,7 @@ impl<'a> Ipv4Pdu<'a> {
 
     /// Consumes this object and returns the slice of the underlying buffer that contains the header part of this PDU
     pub fn into_bytes(self) -> &'a [u8] {
-        &self.buffer[0..self.computed_ihl()]
+        &self.buffer[0..self.computed_ihl().unwrap()]
     }
 
     /// Returns an object representing the inner payload of this PDU
@@ -111,12 +109,12 @@ impl<'a> Ipv4Pdu<'a> {
 
     /// Consumes this object and returns an object representing the inner payload of this PDU
     pub fn into_inner(self) -> Result<Ipv4<'a>> {
-        let rest = &self.buffer[self.computed_ihl()..];
+        let rest = &self.buffer[self.computed_ihl()?..];
 
-        if self.fragment_offset() > 0 {
+        if self.fragment_offset()? > 0 {
             Ok(Ipv4::Raw(rest))
         } else {
-            Ok(match self.protocol() {
+            Ok(match self.protocol()? {
                 IpProto::TCP => Ipv4::Tcp(super::TcpPdu::new(rest)?),
                 IpProto::UDP => Ipv4::Udp(super::UdpPdu::new(rest)?),
                 IpProto::ICMP => Ipv4::Icmp(super::IcmpPdu::new(rest)?),
@@ -132,80 +130,93 @@ impl<'a> Ipv4Pdu<'a> {
         }
     }
 
-    pub fn version(&'a self) -> u8 {
-        self.buffer[0] >> 4
+    pub fn version(&'a self) -> Result<u8> {
+        Ok(util::read_u8(self.buffer, 0)? >> 4)
     }
 
-    pub fn ihl(&'a self) -> u8 {
-        self.buffer[0] & 0xF
+    pub fn ihl(&'a self) -> Result<u8> {
+        Ok(util::read_u8(self.buffer, 0)? & 0xF)
     }
 
-    pub fn computed_ihl(&'a self) -> usize {
-        self.ihl() as usize * 4
+    pub fn computed_ihl(&'a self) -> Result<usize> {
+        Ok(self.ihl()? as usize * 4)
     }
 
-    pub fn dscp(&'a self) -> u8 {
-        self.buffer[1] >> 2
+    pub fn dscp(&'a self) -> Result<u8> {
+        Ok(util::read_u8(self.buffer, 1)? >> 2)
     }
 
-    pub fn ecn(&'a self) -> u8 {
-        self.buffer[1] & 0x3
+    pub fn ecn(&'a self) -> Result<u8> {
+        Ok(util::read_u8(self.buffer, 1)? & 0x3)
     }
 
-    pub fn total_length(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[2..=3].try_into().unwrap())
+    pub fn total_length(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 2)
     }
 
-    pub fn identification(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[4..=5].try_into().unwrap())
+    pub fn identification(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 4)
     }
 
     pub fn dont_fragment(&'a self) -> bool {
-        self.buffer[6] & 0x40 != 0
+        if let Ok(data) = util::read_u8(self.buffer, 6) {
+            return (data & 0x40) != 0;
+        } else {
+            return false;
+        }
     }
 
     pub fn more_fragments(&'a self) -> bool {
-        self.buffer[6] & 0x20 != 0
+        if let Ok(data) = util::read_u8(self.buffer, 6) {
+            return (data & 0x20) != 0;
+        } else {
+            return false;
+        }
     }
 
-    pub fn fragment_offset(&'a self) -> u16 {
-        u16::from_be_bytes([self.buffer[6] & 0x1f, self.buffer[7]])
+    pub fn fragment_offset(&'a self) -> Result<u16> {
+        let byte6 = util::read_u8(self.buffer, 6)? & 0x1f;
+        let byte7 = util::read_u8(self.buffer, 7)?;
+        Ok(u16::from_be_bytes([byte6, byte7]))
     }
 
-    pub fn computed_fragment_offset(&'a self) -> u16 {
-        self.fragment_offset() * 8
+    pub fn computed_fragment_offset(&'a self) -> Result<u16> {
+        Ok(self.fragment_offset()? * 8)
     }
 
-    pub fn ttl(&'a self) -> u8 {
-        self.buffer[8]
+    pub fn ttl(&'a self) -> Result<u8> {
+        util::read_u8(self.buffer, 8)
     }
 
-    pub fn protocol(&'a self) -> u8 {
-        self.buffer[9]
+    pub fn protocol(&'a self) -> Result<u8> {
+        util::read_u8(self.buffer, 9)
     }
 
-    pub fn checksum(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[10..=11].try_into().unwrap())
+    pub fn checksum(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 10)
     }
 
-    pub fn computed_checksum(&'a self) -> u16 {
-        util::checksum(&[&self.buffer[0..=9], &self.buffer[12..self.computed_ihl()]])
+    pub fn computed_checksum(&'a self) -> Result<u16> {
+        Ok(util::checksum(&[
+            &util::read_slice_inclusive(self.buffer, 0, 9)?,
+            &util::read_slice(self.buffer, 12, self.computed_ihl()?)?,
+        ]))
     }
 
-    pub fn source_address(&'a self) -> [u8; 4] {
+    pub fn source_address(&'a self) -> Result<[u8; 4]> {
         let mut source_address = [0u8; 4];
-        source_address.copy_from_slice(&self.buffer[12..16]);
-        source_address
+        source_address.copy_from_slice(&util::read_slice(self.buffer, 12, 16)?);
+        Ok(source_address)
     }
 
-    pub fn destination_address(&'a self) -> [u8; 4] {
+    pub fn destination_address(&'a self) -> Result<[u8; 4]> {
         let mut destination_address = [0u8; 4];
-        destination_address.copy_from_slice(&self.buffer[16..20]);
-        destination_address
+        destination_address.copy_from_slice(&util::read_slice(self.buffer, 16, 20)?);
+        Ok(destination_address)
     }
 
     pub fn options(&'a self) -> Ipv4OptionIterator<'a> {
-        Ipv4OptionIterator { buffer: &self.buffer, pos: 20, ihl: self.computed_ihl() }
+        Ipv4OptionIterator { buffer: &self.buffer, pos: 20, ihl: self.computed_ihl().unwrap() }
     }
 }
 
@@ -276,7 +287,7 @@ impl<'a> Ipv6Pdu<'a> {
         if buffer.len() < 40 {
             return Err(Error::Truncated);
         }
-        if pdu.version() != 6 {
+        if pdu.version()? != 6 {
             return Err(Error::Malformed);
         }
         let mut position = 40;
@@ -291,7 +302,7 @@ impl<'a> Ipv6Pdu<'a> {
         if buffer.len() < position {
             return Err(Error::Truncated);
         }
-        if pdu.computed_ihl() != position {
+        if pdu.computed_ihl()? != position {
             return Err(Error::Malformed);
         }
         Ok(pdu)
@@ -315,7 +326,7 @@ impl<'a> Ipv6Pdu<'a> {
 
     /// Consumes this object and returns the slice of the underlying buffer that contains the header part of this PDU
     pub fn into_bytes(self) -> &'a [u8] {
-        &self.buffer[0..self.computed_ihl()]
+        &self.buffer[0..self.computed_ihl().unwrap()]
     }
 
     /// Returns an object representing the inner payload of this PDU
@@ -325,12 +336,12 @@ impl<'a> Ipv6Pdu<'a> {
 
     /// Consumes this object and returns an object representing the inner payload of this PDU
     pub fn into_inner(self) -> Result<Ipv6<'a>> {
-        let rest = &self.buffer[self.computed_ihl()..];
+        let rest = &self.buffer[self.computed_ihl()?..];
 
         if self.computed_fragment_offset().unwrap_or_default() > 0 {
             Ok(Ipv6::Raw(rest))
         } else {
-            Ok(match self.computed_protocol() {
+            Ok(match self.computed_protocol()? {
                 IpProto::TCP => Ipv6::Tcp(super::TcpPdu::new(rest)?),
                 IpProto::UDP => Ipv6::Udp(super::UdpPdu::new(rest)?),
                 IpProto::ICMP6 => Ipv6::Icmp(super::IcmpPdu::new(rest)?),
@@ -346,48 +357,53 @@ impl<'a> Ipv6Pdu<'a> {
         }
     }
 
-    pub fn version(&'a self) -> u8 {
-        self.buffer[0] >> 4
+    pub fn version(&'a self) -> Result<u8> {
+        Ok(util::read_u8(self.buffer, 0)? >> 4)
     }
 
-    pub fn dscp(&'a self) -> u8 {
-        ((self.buffer[0] << 4) | (self.buffer[1] >> 4)) >> 2
+    pub fn dscp(&'a self) -> Result<u8> {
+        Ok(((util::read_u8(self.buffer, 0)? << 4) | (util::read_u8(self.buffer, 1)? >> 4)) >> 2)
     }
 
-    pub fn ecn(&'a self) -> u8 {
-        (self.buffer[1] >> 4) & 0x3
+    pub fn ecn(&'a self) -> Result<u8> {
+        Ok((util::read_u8(self.buffer, 1)? >> 4) & 0x3)
     }
 
-    pub fn flow_label(&'a self) -> u32 {
-        u32::from_be_bytes([0, self.buffer[1] & 0xf, self.buffer[2], self.buffer[3]])
+    pub fn flow_label(&'a self) -> Result<u32> {
+        Ok(u32::from_be_bytes([
+            0,
+            util::read_u8(self.buffer, 1)? & 0xf,
+            util::read_u8(self.buffer, 2)?,
+            util::read_u8(self.buffer, 3)?,
+        ]))
     }
 
-    pub fn payload_length(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[4..=5].try_into().unwrap())
+    pub fn payload_length(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 4)
     }
 
-    pub fn next_header(&'a self) -> u8 {
-        self.buffer[6]
+    pub fn next_header(&'a self) -> Result<u8> {
+        util::read_u8(self.buffer, 6)
     }
 
-    pub fn computed_ihl(&'a self) -> usize {
+    pub fn computed_ihl(&'a self) -> Result<usize> {
         let mut position = 40;
-        let mut next_header = self.next_header();
+        let mut next_header = self.next_header()?;
         while let 0 | 43 | 44 | 59 | 60 = next_header {
-            next_header = self.buffer[position];
-            position += ((self.buffer[position + 1] as usize) + 1) * 8;
+            next_header = util::read_u8(self.buffer, position)?;
+            position += ((util::read_u8(self.buffer, position + 1)? as usize) + 1) * 8;
         }
-        position
+        Ok(position)
     }
 
-    pub fn computed_protocol(&'a self) -> u8 {
+    pub fn computed_protocol(&'a self) -> Result<u8> {
         let mut position = 40;
-        let mut next_header = self.next_header();
+        let mut next_header = self.next_header()?;
         while let 0 | 43 | 44 | 59 | 60 = next_header {
-            next_header = self.buffer[position];
-            position += ((self.buffer[position + 1] as usize) + 1) * 8;
+            next_header = util::read_u8(self.buffer, position)?;
+            position += ((util::read_u8(self.buffer, position + 1)? as usize) + 1) * 8;
         }
-        next_header
+        Ok(next_header)
     }
 
     pub fn computed_identification(&'a self) -> Option<u32> {
@@ -417,24 +433,24 @@ impl<'a> Ipv6Pdu<'a> {
         None
     }
 
-    pub fn hop_limit(&'a self) -> u8 {
-        self.buffer[7]
+    pub fn hop_limit(&'a self) -> Result<u8> {
+        util::read_u8(self.buffer, 7)
     }
 
-    pub fn source_address(&'a self) -> [u8; 16] {
+    pub fn source_address(&'a self) -> Result<[u8; 16]> {
         let mut source_address = [0u8; 16];
-        source_address.copy_from_slice(&self.buffer[8..24]);
-        source_address
+        source_address.copy_from_slice(&util::read_slice(self.buffer, 8, 24)?);
+        Ok(source_address)
     }
 
-    pub fn destination_address(&'a self) -> [u8; 16] {
+    pub fn destination_address(&'a self) -> Result<[u8; 16]> {
         let mut destination_address = [0u8; 16];
-        destination_address.copy_from_slice(&self.buffer[24..40]);
-        destination_address
+        destination_address.copy_from_slice(&util::read_slice(self.buffer, 24, 40)?);
+        Ok(destination_address)
     }
 
     pub fn extension_headers(&'a self) -> Ipv6ExtensionHeaderIterator<'a> {
-        Ipv6ExtensionHeaderIterator { buffer: self.buffer, pos: 40, next_header: self.next_header() }
+        Ipv6ExtensionHeaderIterator { buffer: self.buffer, pos: 40, next_header: self.next_header().unwrap() }
     }
 }
 

@@ -21,10 +21,10 @@ use pdu::*;
 pub fn fuzz(data: &[u8]) {
     match EthernetPdu::new(&data) {
         Ok(ethernet_pdu) => {
-            ethernet_pdu.computed_ihl();
-            ethernet_pdu.destination_address();
-            ethernet_pdu.source_address();
-            ethernet_pdu.ethertype();
+            ethernet_pdu.computed_ihl().unwrap();
+            ethernet_pdu.destination_address().unwrap();
+            ethernet_pdu.source_address().unwrap();
+            ethernet_pdu.ethertype().unwrap();
             ethernet_pdu.vlan();
             ethernet_pdu.vlan_pcp();
             ethernet_pdu.vlan_dei();

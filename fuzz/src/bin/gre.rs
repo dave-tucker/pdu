@@ -22,8 +22,8 @@ pub fn fuzz(data: &[u8]) {
     match GrePdu::new(&data) {
         Ok(gre_pdu) => {
             gre_pdu.computed_ihl();
-            gre_pdu.version();
-            gre_pdu.ethertype();
+            gre_pdu.version().unwrap();
+            gre_pdu.ethertype().unwrap();
             gre_pdu.checksum();
             gre_pdu.computed_checksum();
             gre_pdu.key();

@@ -18,7 +18,9 @@
 
 use core::convert::TryInto;
 
-pub fn checksum<I, J>(spans: I) -> u16
+use crate::Error;
+
+pub(crate) fn checksum<I, J>(spans: I) -> u16
 where
     I: IntoIterator<Item = J>,
     J: AsRef<[u8]>,
@@ -33,7 +35,7 @@ where
     !(((accum >> 16) as u16) + (accum as u16))
 }
 
-fn sum(mut buffer: &[u8]) -> u16 {
+pub(crate) fn sum(mut buffer: &[u8]) -> u16 {
     let mut accum = 0;
 
     while buffer.len() >= 32 {
@@ -56,4 +58,49 @@ fn sum(mut buffer: &[u8]) -> u16 {
 
     accum = (accum >> 16) + (accum & 0xffff);
     ((accum >> 16) as u16) + (accum as u16)
+}
+
+#[inline(always)]
+pub(crate) fn read_u8(buffer: &[u8], position: usize) -> Result<u8, Error> {
+    match buffer.get(position) {
+        Some(data) => Ok(*data),
+        None => Err(Error::OutOfBounds),
+    }
+}
+
+#[inline(always)]
+pub(crate) fn read_u16(buffer: &[u8], position: usize) -> Result<u16, Error> {
+    match buffer.get(position..=position + 1) {
+        Some(data) => {
+            let data: [u8; 2] = (*data).try_into().map_err(|_| Error::ConversionError)?;
+            Ok(u16::from_be_bytes(data))
+        }
+        None => Err(Error::OutOfBounds),
+    }
+}
+
+#[inline(always)]
+pub(crate) fn read_u32(buffer: &[u8], position: usize) -> Result<u32, Error> {
+    match buffer.get(position..=position + 3) {
+        Some(data) => {
+            let data: [u8; 4] = (*data).try_into().map_err(|_| Error::ConversionError)?;
+            Ok(u32::from_be_bytes(data))
+        }
+        None => Err(Error::OutOfBounds),
+    }
+}
+
+#[inline(always)]
+pub(crate) fn read_slice(buffer: &[u8], start: usize, end: usize) -> Result<&[u8], Error> {
+    buffer.get(start..end).ok_or(Error::OutOfBounds)
+}
+
+#[inline(always)]
+pub(crate) fn read_slice_inclusive(buffer: &[u8], start: usize, end: usize) -> Result<&[u8], Error> {
+    buffer.get(start..=end).ok_or(Error::OutOfBounds)
+}
+
+#[inline(always)]
+pub(crate) fn read_slice_after(buffer: &[u8], start: usize) -> Result<&[u8], Error> {
+    buffer.get(start..).ok_or(Error::OutOfBounds)
 }

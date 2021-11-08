@@ -48,6 +48,8 @@ mod util;
 pub enum Error {
     Truncated,
     Malformed,
+    OutOfBounds,
+    ConversionError,
 }
 
 /// Defines the return type used by packet parsers in this crate
@@ -62,6 +64,8 @@ impl std::fmt::Display for Error {
         match self {
             Error::Truncated => f.write_str("frame is truncated"),
             Error::Malformed => f.write_str("frame is malformed"),
+            Error::OutOfBounds => f.write_str("attempted to read outside of buffer"),
+            Error::ConversionError => f.write_str("error converting bytes"),
         }
     }
 }

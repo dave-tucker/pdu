@@ -16,9 +16,7 @@
    SPDX-License-Identifier: Apache-2.0
 */
 
-use core::convert::TryInto;
-
-use crate::{Error, Result};
+use crate::{util, Error, Result};
 
 /// Represents an ARP payload
 #[derive(Debug, Copy, Clone)]
@@ -33,11 +31,11 @@ impl<'a> ArpPdu<'a> {
             return Err(Error::Truncated);
         }
         let pdu = ArpPdu { buffer };
-        if pdu.hardware_length() != 6 {
+        if pdu.hardware_length()? != 6 {
             // we only support 6-octet hardware addresses
             return Err(Error::Malformed);
         }
-        if pdu.protocol_length() != 4 {
+        if pdu.protocol_length()? != 4 {
             // we only support 4-octet protocol addresses
             return Err(Error::Malformed);
         }
@@ -59,56 +57,56 @@ impl<'a> ArpPdu<'a> {
     }
 
     /// Returns the slice of the underlying buffer that contains this PDU
-    pub fn as_bytes(&'a self) -> &'a [u8] {
+    pub fn as_bytes(&'a self) -> Result<&'a [u8]> {
         self.clone().into_bytes()
     }
 
     /// Consumes this object and returns the slice of the underlying buffer that contains this PDU
-    pub fn into_bytes(self) -> &'a [u8] {
-        &self.buffer[0..28]
+    pub fn into_bytes(self) -> Result<&'a [u8]> {
+        util::read_slice(self.buffer, 0, 28)
     }
 
-    pub fn hardware_type(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[0..=1].try_into().unwrap())
+    pub fn hardware_type(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 0)
     }
 
-    pub fn protocol_type(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[2..=3].try_into().unwrap())
+    pub fn protocol_type(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 2)
     }
 
-    pub fn hardware_length(&'a self) -> u8 {
-        self.buffer[4]
+    pub fn hardware_length(&'a self) -> Result<u8> {
+        util::read_u8(self.buffer, 4)
     }
 
-    pub fn protocol_length(&'a self) -> u8 {
-        self.buffer[5]
+    pub fn protocol_length(&'a self) -> Result<u8> {
+        util::read_u8(self.buffer, 5)
     }
 
-    pub fn opcode(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[6..=7].try_into().unwrap())
+    pub fn opcode(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 6)
     }
 
-    pub fn sender_hardware_address(&'a self) -> [u8; 6] {
+    pub fn sender_hardware_address(&'a self) -> Result<[u8; 6]> {
         let mut sender_hardware_address = [0u8; 6];
-        sender_hardware_address.copy_from_slice(&self.buffer[8..14]);
-        sender_hardware_address
+        sender_hardware_address.copy_from_slice(&util::read_slice(self.buffer, 8, 14)?);
+        Ok(sender_hardware_address)
     }
 
-    pub fn sender_protocol_address(&'a self) -> [u8; 4] {
+    pub fn sender_protocol_address(&'a self) -> Result<[u8; 4]> {
         let mut sender_protocol_address = [0u8; 4];
-        sender_protocol_address.copy_from_slice(&self.buffer[14..18]);
-        sender_protocol_address
+        sender_protocol_address.copy_from_slice(&util::read_slice(self.buffer, 14, 18)?);
+        Ok(sender_protocol_address)
     }
 
-    pub fn target_hardware_address(&'a self) -> [u8; 6] {
+    pub fn target_hardware_address(&'a self) -> Result<[u8; 6]> {
         let mut target_hardware_address = [0u8; 6];
-        target_hardware_address.copy_from_slice(&self.buffer[18..24]);
-        target_hardware_address
+        target_hardware_address.copy_from_slice(&util::read_slice(self.buffer, 18, 24)?);
+        Ok(target_hardware_address)
     }
 
-    pub fn target_protocol_address(&'a self) -> [u8; 4] {
+    pub fn target_protocol_address(&'a self) -> Result<[u8; 4]> {
         let mut target_protocol_address = [0u8; 4];
-        target_protocol_address.copy_from_slice(&self.buffer[24..28]);
-        target_protocol_address
+        target_protocol_address.copy_from_slice(&util::read_slice(self.buffer, 24, 28)?);
+        Ok(target_protocol_address)
     }
 }

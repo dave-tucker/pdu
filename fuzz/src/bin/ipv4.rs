@@ -21,22 +21,22 @@ use pdu::*;
 pub fn fuzz(data: &[u8]) {
     match Ipv4Pdu::new(&data) {
         Ok(ipv4_pdu) => {
-            ipv4_pdu.version();
-            ipv4_pdu.ihl();
-            ipv4_pdu.computed_ihl();
-            ipv4_pdu.dscp();
-            ipv4_pdu.ecn();
-            ipv4_pdu.total_length();
-            ipv4_pdu.identification();
+            ipv4_pdu.version().unwrap();
+            ipv4_pdu.ihl().unwrap();
+            ipv4_pdu.computed_ihl().unwrap();
+            ipv4_pdu.dscp().unwrap();
+            ipv4_pdu.ecn().unwrap();
+            ipv4_pdu.total_length().unwrap();
+            ipv4_pdu.identification().unwrap();
             ipv4_pdu.dont_fragment();
             ipv4_pdu.more_fragments();
-            ipv4_pdu.fragment_offset();
-            ipv4_pdu.ttl();
-            ipv4_pdu.protocol();
-            ipv4_pdu.checksum();
-            ipv4_pdu.computed_checksum();
-            ipv4_pdu.source_address();
-            ipv4_pdu.destination_address();
+            ipv4_pdu.fragment_offset().unwrap();
+            ipv4_pdu.ttl().unwrap();
+            ipv4_pdu.protocol().unwrap();
+            ipv4_pdu.checksum().unwrap();
+            ipv4_pdu.computed_checksum().unwrap();
+            ipv4_pdu.source_address().unwrap();
+            ipv4_pdu.destination_address().unwrap();
             for option in ipv4_pdu.options() {
                 match option {
                     Ipv4Option::Raw { .. } => {

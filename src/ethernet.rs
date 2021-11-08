@@ -16,9 +16,7 @@
    SPDX-License-Identifier: Apache-2.0
 */
 
-use core::convert::TryInto;
-
-use crate::{Error, Result};
+use crate::{util, Error, Result};
 
 /// Provides constants representing various EtherTypes supported by this crate
 #[allow(non_snake_case)]
@@ -52,10 +50,10 @@ impl<'a> EthernetPdu<'a> {
             return Err(Error::Truncated);
         }
         let pdu = EthernetPdu { buffer };
-        if pdu.tpid() == EtherType::DOT1Q && buffer.len() < 18 {
+        if pdu.tpid()? == EtherType::DOT1Q && buffer.len() < 18 {
             return Err(Error::Truncated);
         }
-        if pdu.ethertype() < 0x0600 {
+        if pdu.ethertype()? < 0x0600 {
             // we don't support 802.3 (LLC) frames
             return Err(Error::Malformed);
         }
@@ -80,7 +78,7 @@ impl<'a> EthernetPdu<'a> {
 
     /// Consumes this object and returns the slice of the underlying buffer that contains the header part of this PDU
     pub fn into_bytes(self) -> &'a [u8] {
-        &self.buffer[0..self.computed_ihl()]
+        &self.buffer[0..self.computed_ihl().unwrap()]
     }
 
     /// Returns an object representing the inner payload of this PDU
@@ -90,8 +88,8 @@ impl<'a> EthernetPdu<'a> {
 
     /// Consumes this object and returns an object representing the inner payload of this PDU
     pub fn into_inner(self) -> Result<Ethernet<'a>> {
-        let rest = &self.buffer[self.computed_ihl()..];
-        Ok(match self.ethertype() {
+        let rest = &self.buffer[self.computed_ihl()?..];
+        Ok(match self.ethertype()? {
             EtherType::ARP => Ethernet::Arp(super::ArpPdu::new(rest)?),
             EtherType::IPV4 => Ethernet::Ipv4(super::Ipv4Pdu::new(rest)?),
             EtherType::IPV6 => Ethernet::Ipv6(super::Ipv6Pdu::new(rest)?),
@@ -99,53 +97,71 @@ impl<'a> EthernetPdu<'a> {
         })
     }
 
-    pub fn computed_ihl(&'a self) -> usize {
-        match self.tpid() {
-            EtherType::DOT1Q => 18,
-            _ => 14,
+    pub fn computed_ihl(&'a self) -> Result<usize> {
+        match self.tpid()? {
+            EtherType::DOT1Q => Ok(18),
+            _ => Ok(14),
         }
     }
 
-    pub fn source_address(&'a self) -> [u8; 6] {
+    pub fn source_address(&'a self) -> Result<[u8; 6]> {
         let mut source_address = [0u8; 6];
-        source_address.copy_from_slice(&self.buffer[6..12]);
-        source_address
+        source_address.copy_from_slice(&util::read_slice(self.buffer, 6, 12)?);
+        Ok(source_address)
     }
 
-    pub fn destination_address(&'a self) -> [u8; 6] {
+    pub fn destination_address(&'a self) -> Result<[u8; 6]> {
         let mut destination_address = [0u8; 6];
-        destination_address.copy_from_slice(&self.buffer[0..6]);
-        destination_address
+        destination_address.copy_from_slice(&util::read_slice(self.buffer, 0, 6)?);
+        Ok(destination_address)
     }
 
-    pub fn tpid(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[12..=13].try_into().unwrap())
+    pub fn tpid(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 12)
     }
 
-    pub fn ethertype(&'a self) -> u16 {
-        match self.tpid() {
-            EtherType::DOT1Q => u16::from_be_bytes(self.buffer[16..=17].try_into().unwrap()),
-            ethertype => ethertype,
+    pub fn ethertype(&'a self) -> Result<u16> {
+        match self.tpid()? {
+            EtherType::DOT1Q => util::read_u16(self.buffer, 16),
+            ethertype => Ok(ethertype),
         }
     }
 
     pub fn vlan(&'a self) -> Option<u16> {
         match self.tpid() {
-            EtherType::DOT1Q => Some(u16::from_be_bytes(self.buffer[14..=15].try_into().unwrap()) & 0x0FFF),
+            Ok(EtherType::DOT1Q) => {
+                if let Ok(data) = util::read_u16(self.buffer, 14) {
+                    Some(data & 0x0FFF)
+                } else {
+                    None
+                }
+            }
             _ => None,
         }
     }
 
     pub fn vlan_pcp(&'a self) -> Option<u8> {
         match self.tpid() {
-            EtherType::DOT1Q => Some((self.buffer[14] & 0xE0) >> 5),
+            Ok(EtherType::DOT1Q) => {
+                if let Ok(data) = util::read_u8(self.buffer, 14) {
+                    Some((data & 0xE0) >> 5)
+                } else {
+                    None
+                }
+            }
             _ => None,
         }
     }
 
     pub fn vlan_dei(&'a self) -> Option<bool> {
         match self.tpid() {
-            EtherType::DOT1Q => Some(((self.buffer[14] & 0x10) >> 4) > 0),
+            Ok(EtherType::DOT1Q) => {
+                if let Ok(data) = util::read_u8(self.buffer, 14) {
+                    Some(((data & 0x10) >> 4) > 0)
+                } else {
+                    None
+                }
+            }
             _ => None,
         }
     }

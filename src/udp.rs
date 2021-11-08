@@ -16,8 +16,6 @@
    SPDX-License-Identifier: Apache-2.0
 */
 
-use core::convert::TryInto;
-
 use crate::{util, Error, Result};
 
 /// Represents a UDP header and payload
@@ -54,13 +52,13 @@ impl<'a> UdpPdu<'a> {
     }
 
     /// Returns the slice of the underlying buffer that contains the header part of this PDU
-    pub fn as_bytes(&'a self) -> &'a [u8] {
+    pub fn as_bytes(&'a self) -> Result<&'a [u8]> {
         self.clone().into_bytes()
     }
 
     /// Consumes this object and returns the slice of the underlying buffer that contains the header part of this PDU
-    pub fn into_bytes(self) -> &'a [u8] {
-        &self.buffer[0..8]
+    pub fn into_bytes(self) -> Result<&'a [u8]> {
+        util::read_slice(self.buffer, 0, 8)
     }
 
     /// Returns an object representing the inner payload of this PDU
@@ -70,44 +68,44 @@ impl<'a> UdpPdu<'a> {
 
     /// Consumes this object and returns an object representing the inner payload of this PDU
     pub fn into_inner(self) -> Result<Udp<'a>> {
-        let rest = &self.buffer[8..];
+        let rest = util::read_slice_after(self.buffer, 8)?;
         Ok(Udp::Raw(rest))
     }
 
-    pub fn source_port(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[0..=1].try_into().unwrap())
+    pub fn source_port(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 0)
     }
 
-    pub fn destination_port(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[2..=3].try_into().unwrap())
+    pub fn destination_port(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 2)
     }
 
-    pub fn length(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[4..=5].try_into().unwrap())
+    pub fn length(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 4)
     }
 
-    pub fn checksum(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[6..=7].try_into().unwrap())
+    pub fn checksum(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 6)
     }
 
-    pub fn computed_checksum(&'a self, ip: &crate::Ip) -> u16 {
+    pub fn computed_checksum(&'a self, ip: &crate::Ip) -> Result<u16> {
         match ip {
-            crate::Ip::Ipv4(ipv4) => util::checksum(&[
-                &ipv4.source_address().as_ref(),
-                &ipv4.destination_address().as_ref(),
-                &[0x00, ipv4.protocol()].as_ref(),
-                &self.length().to_be_bytes().as_ref(),
-                &self.buffer[0..=5],
-                &self.buffer[8..],
-            ]),
-            crate::Ip::Ipv6(ipv6) => util::checksum(&[
-                &ipv6.source_address().as_ref(),
-                &ipv6.destination_address().as_ref(),
-                &(self.length() as u32).to_be_bytes().as_ref(),
-                &[0x0, 0x0, 0x0, ipv6.computed_protocol()].as_ref(),
-                &self.buffer[0..=5],
-                &self.buffer[8..],
-            ]),
+            crate::Ip::Ipv4(ipv4) => Ok(util::checksum(&[
+                &ipv4.source_address()?.as_ref(),
+                &ipv4.destination_address()?.as_ref(),
+                &[0x00, ipv4.protocol()?].as_ref(),
+                &self.length()?.to_be_bytes().as_ref(),
+                &util::read_slice_inclusive(self.buffer, 0, 5)?,
+                &util::read_slice_after(self.buffer, 8)?,
+            ])),
+            crate::Ip::Ipv6(ipv6) => Ok(util::checksum(&[
+                &ipv6.source_address()?.as_ref(),
+                &ipv6.destination_address()?.as_ref(),
+                &(self.length()? as u32).to_be_bytes().as_ref(),
+                &[0x0, 0x0, 0x0, ipv6.computed_protocol()?].as_ref(),
+                &util::read_slice_inclusive(self.buffer, 0, 5)?,
+                &util::read_slice_after(self.buffer, 8)?,
+            ])),
         }
     }
 

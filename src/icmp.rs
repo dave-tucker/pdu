@@ -16,8 +16,6 @@
    SPDX-License-Identifier: Apache-2.0
 */
 
-use core::convert::TryInto;
-
 use crate::{util, Error, Result};
 
 /// Represents an ICMP payload
@@ -53,13 +51,13 @@ impl<'a> IcmpPdu<'a> {
     }
 
     /// Returns the slice of the underlying buffer that contains the header part of this PDU
-    pub fn as_bytes(&'a self) -> &'a [u8] {
+    pub fn as_bytes(&'a self) -> Result<&'a [u8]> {
         self.clone().into_bytes()
     }
 
     /// Consumes this object and returns the slice of the underlying buffer that contains the header part of this PDU
-    pub fn into_bytes(self) -> &'a [u8] {
-        &self.buffer[0..8]
+    pub fn into_bytes(self) -> Result<&'a [u8]> {
+        util::read_slice(self.buffer, 0, 8)
     }
 
     /// Returns an object representing the inner payload of this PDU
@@ -69,39 +67,42 @@ impl<'a> IcmpPdu<'a> {
 
     /// Consumes this object and returns an object representing the inner payload of this PDU
     pub fn into_inner(self) -> Result<Icmp<'a>> {
-        let rest = &self.buffer[4..];
+        let rest = util::read_slice_after(self.buffer, 4)?;
         Ok(Icmp::Raw(rest))
     }
 
-    pub fn message_type(&'a self) -> u8 {
-        self.buffer[0]
+    pub fn message_type(&'a self) -> Result<u8> {
+        util::read_u8(self.buffer, 0)
     }
 
-    pub fn message_code(&'a self) -> u8 {
-        self.buffer[1]
+    pub fn message_code(&'a self) -> Result<u8> {
+        util::read_u8(self.buffer, 1)
     }
 
-    pub fn checksum(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[2..=3].try_into().unwrap())
+    pub fn checksum(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 2)
     }
 
-    pub fn computed_checksum(&'a self, ip: &crate::Ip) -> u16 {
+    pub fn computed_checksum(&'a self, ip: &crate::Ip) -> Result<u16> {
         match ip {
-            crate::Ip::Ipv4(_) => util::checksum(&[&self.buffer[0..=1], &self.buffer[4..]]),
-            crate::Ip::Ipv6(ipv6) => util::checksum(&[
-                &ipv6.source_address().as_ref(),
-                &ipv6.destination_address().as_ref(),
-                &(ipv6.payload_length() as u32).to_be_bytes().as_ref(),
-                &[0x0, 0x0, 0x0, ipv6.computed_protocol()].as_ref(),
-                &self.buffer[0..=1],
-                &self.buffer[4..],
-            ]),
+            crate::Ip::Ipv4(_) => Ok(util::checksum(&[
+                &util::read_slice_inclusive(self.buffer, 0, 1)?,
+                &util::read_slice_after(self.buffer, 4)?,
+            ])),
+            crate::Ip::Ipv6(ipv6) => Ok(util::checksum(&[
+                &ipv6.source_address()?.as_ref(),
+                &ipv6.destination_address()?.as_ref(),
+                &(ipv6.payload_length()? as u32).to_be_bytes().as_ref(),
+                &[0x0, 0x0, 0x0, ipv6.computed_protocol()?].as_ref(),
+                &util::read_slice_inclusive(self.buffer, 0, 1)?,
+                &util::read_slice_after(self.buffer, 4)?,
+            ])),
         }
     }
 
     #[deprecated(since = "1.3.0", note = "use IcmpPdu::inner()")]
     pub fn message(&'a self) -> &'a [u8] {
-        &self.buffer[4..]
+        &util::read_slice_after(self.buffer, 4).unwrap()
     }
 
     pub fn computed_data_offset(&'a self) -> usize {

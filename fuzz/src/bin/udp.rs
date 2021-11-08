@@ -21,10 +21,10 @@ use pdu::*;
 pub fn fuzz(data: &[u8]) {
     match UdpPdu::new(&data) {
         Ok(udp_pdu) => {
-            udp_pdu.source_port();
-            udp_pdu.destination_port();
-            udp_pdu.length();
-            udp_pdu.checksum();
+            udp_pdu.source_port().unwrap();
+            udp_pdu.destination_port().unwrap();
+            udp_pdu.length().unwrap();
+            udp_pdu.checksum().unwrap();
             let ip = Ip::Ipv4(
                 Ipv4Pdu::new(&[
                     0x45u8, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -32,7 +32,7 @@ pub fn fuzz(data: &[u8]) {
                 ])
                 .unwrap(),
             );
-            udp_pdu.computed_checksum(&ip);
+            udp_pdu.computed_checksum(&ip).unwrap();
             let ip = Ip::Ipv6(
                 Ipv6Pdu::new(&[
                     0x60u8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -41,7 +41,7 @@ pub fn fuzz(data: &[u8]) {
                 ])
                 .unwrap(),
             );
-            udp_pdu.computed_checksum(&ip);
+            udp_pdu.computed_checksum(&ip).unwrap();
         }
         Err(_) => {}
     }

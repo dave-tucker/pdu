@@ -16,8 +16,6 @@
    SPDX-License-Identifier: Apache-2.0
 */
 
-use core::convert::TryInto;
-
 use crate::{util, Error, Result};
 
 /// Represents a GRE header and payload
@@ -81,7 +79,7 @@ impl<'a> GrePdu<'a> {
     /// Consumes this object and returns an object representing the inner payload of this PDU
     pub fn into_inner(self) -> Result<Gre<'a>> {
         let rest = &self.buffer[self.computed_ihl()..];
-        Ok(match self.ethertype() {
+        Ok(match self.ethertype()? {
             super::EtherType::TEB => Gre::Ethernet(super::EthernetPdu::new(rest)?),
             super::EtherType::IPV4 => Gre::Ipv4(super::Ipv4Pdu::new(rest)?),
             super::EtherType::IPV6 => Gre::Ipv6(super::Ipv6Pdu::new(rest)?),
@@ -103,29 +101,45 @@ impl<'a> GrePdu<'a> {
         ihl
     }
 
-    pub fn version(&'a self) -> u8 {
-        self.buffer[1] & 0x07
+    pub fn version(&'a self) -> Result<u8> {
+        Ok(util::read_u8(self.buffer, 1)? & 0x07)
     }
 
-    pub fn ethertype(&'a self) -> u16 {
-        u16::from_be_bytes(self.buffer[2..=3].try_into().unwrap())
+    pub fn ethertype(&'a self) -> Result<u16> {
+        util::read_u16(self.buffer, 2)
     }
 
     pub fn has_checksum(&'a self) -> bool {
-        (self.buffer[0] & 0x80) != 0
+        if let Ok(data) = util::read_u8(self.buffer, 0) {
+            return (data & 0x80) != 0;
+        } else {
+            return false;
+        }
     }
 
     pub fn has_key(&'a self) -> bool {
-        (self.buffer[0] & 0x20) != 0
+        if let Ok(data) = util::read_u8(self.buffer, 0) {
+            return (data & 0x20) != 0;
+        } else {
+            return false;
+        }
     }
 
     pub fn has_sequence_number(&'a self) -> bool {
-        (self.buffer[0] & 0x10) != 0
+        if let Ok(data) = util::read_u8(self.buffer, 0) {
+            return (data & 0x10) != 0;
+        } else {
+            return false;
+        }
     }
 
     pub fn checksum(&'a self) -> Option<u16> {
         if self.has_checksum() {
-            Some(u16::from_be_bytes(self.buffer[4..=5].try_into().unwrap()))
+            if let Ok(data) = util::read_u16(self.buffer, 4) {
+                Some(data)
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -133,7 +147,15 @@ impl<'a> GrePdu<'a> {
 
     pub fn computed_checksum(&'a self) -> Option<u16> {
         if self.has_checksum() {
-            Some(util::checksum(&[&self.buffer[0..=3], &self.buffer[6..]]))
+            let span1 = match util::read_slice_inclusive(self.buffer, 0, 3) {
+                Ok(span) => span,
+                Err(_) => return None,
+            };
+            let span2 = match util::read_slice_after(self.buffer, 6) {
+                Ok(span) => span,
+                Err(_) => return None,
+            };
+            Some(util::checksum(&[&span1, &span2]))
         } else {
             None
         }
@@ -141,9 +163,9 @@ impl<'a> GrePdu<'a> {
 
     pub fn key(&'a self) -> Option<u32> {
         if self.has_checksum() && self.has_key() {
-            Some(u32::from_be_bytes(self.buffer[8..=11].try_into().unwrap()))
+            util::read_u32(self.buffer, 8).ok()
         } else if self.has_key() {
-            Some(u32::from_be_bytes(self.buffer[4..=7].try_into().unwrap()))
+            util::read_u32(self.buffer, 4).ok()
         } else {
             None
         }
@@ -151,11 +173,11 @@ impl<'a> GrePdu<'a> {
 
     pub fn sequence_number(&'a self) -> Option<u32> {
         if self.has_sequence_number() && self.has_checksum() && self.has_key() {
-            Some(u32::from_be_bytes(self.buffer[12..=15].try_into().unwrap()))
+            util::read_u32(self.buffer, 12).ok()
         } else if self.has_sequence_number() && (self.has_checksum() || self.has_key()) {
-            Some(u32::from_be_bytes(self.buffer[8..=11].try_into().unwrap()))
+            util::read_u32(self.buffer, 8).ok()
         } else if self.has_sequence_number() {
-            Some(u32::from_be_bytes(self.buffer[4..=7].try_into().unwrap()))
+            util::read_u32(self.buffer, 4).ok()
         } else {
             None
         }
