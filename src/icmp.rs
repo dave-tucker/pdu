@@ -52,7 +52,7 @@ impl<'a> IcmpPdu<'a> {
 
     /// Returns the slice of the underlying buffer that contains the header part of this PDU
     pub fn as_bytes(&'a self) -> Result<&'a [u8]> {
-        self.clone().into_bytes()
+        (*self).into_bytes()
     }
 
     /// Consumes this object and returns the slice of the underlying buffer that contains the header part of this PDU
@@ -62,7 +62,7 @@ impl<'a> IcmpPdu<'a> {
 
     /// Returns an object representing the inner payload of this PDU
     pub fn inner(&'a self) -> Result<Icmp<'a>> {
-        self.clone().into_inner()
+        (*self).into_inner()
     }
 
     /// Consumes this object and returns an object representing the inner payload of this PDU
@@ -102,7 +102,7 @@ impl<'a> IcmpPdu<'a> {
 
     #[deprecated(since = "1.3.0", note = "use IcmpPdu::inner()")]
     pub fn message(&'a self) -> &'a [u8] {
-        &util::read_slice_after(self.buffer, 4).unwrap()
+        util::read_slice_after(self.buffer, 4).unwrap()
     }
 
     pub fn computed_data_offset(&'a self) -> usize {

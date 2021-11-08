@@ -26,8 +26,6 @@ use std::path;
 use std::process::{Command, Stdio};
 use std::result::Result;
 
-use base16;
-use pcap;
 use roxmltree as xml;
 
 fn hex_decode<T: ?Sized + AsRef<[u8]>>(length: usize, input: &T) -> Vec<u8> {
@@ -114,7 +112,10 @@ fn visit_ethernet_pdu(pdu: &EthernetPdu, mut nodes: VecDeque<xml::Node>) -> Resu
 
     match pdu.inner() {
         Ok(ethernet) => match ethernet {
-            Ethernet::Raw(raw) => Ok(assert_eq!(&pdu.buffer()[pdu.computed_ihl()?..], raw)),
+            Ethernet::Raw(raw) => {
+                assert_eq!(&pdu.buffer()[pdu.computed_ihl()?..], raw);
+                Ok(())
+            }
             Ethernet::Arp(arp_pdu) => visit_arp_pdu(&arp_pdu, nodes),
             Ethernet::Ipv4(ipv4_pdu) => visit_ipv4_pdu(&ipv4_pdu, nodes),
             Ethernet::Ipv6(ipv6_pdu) => visit_ipv6_pdu(&ipv6_pdu, nodes),
@@ -193,7 +194,10 @@ fn visit_ipv4_pdu(pdu: &Ipv4Pdu, mut nodes: VecDeque<xml::Node>) -> Result<(), B
 
     match pdu.inner() {
         Ok(ipv4) => match ipv4 {
-            Ipv4::Raw(raw) => Ok(assert_eq!(&pdu.buffer()[pdu.computed_ihl()?..], raw)),
+            Ipv4::Raw(raw) => {
+                assert_eq!(&pdu.buffer()[pdu.computed_ihl()?..], raw);
+                Ok(())
+            }
             Ipv4::Tcp(tcp_pdu) => visit_tcp_pdu(&tcp_pdu, &Ip::Ipv4(*pdu), nodes),
             Ipv4::Udp(udp_pdu) => visit_udp_pdu(&udp_pdu, &Ip::Ipv4(*pdu), nodes),
             Ipv4::Icmp(icmp_pdu) => visit_icmp_pdu(&icmp_pdu, &Ip::Ipv4(*pdu), nodes),
@@ -238,7 +242,10 @@ fn visit_ipv6_pdu(pdu: &Ipv6Pdu, mut nodes: VecDeque<xml::Node>) -> Result<(), B
 
     match pdu.inner() {
         Ok(ipv6) => match ipv6 {
-            Ipv6::Raw(raw) => Ok(assert_eq!(&pdu.buffer()[pdu.computed_ihl()?..], raw)),
+            Ipv6::Raw(raw) => {
+                assert_eq!(&pdu.buffer()[pdu.computed_ihl()?..], raw);
+                Ok(())
+            }
             Ipv6::Tcp(tcp_pdu) => visit_tcp_pdu(&tcp_pdu, &Ip::Ipv6(*pdu), nodes),
             Ipv6::Udp(udp_pdu) => visit_udp_pdu(&udp_pdu, &Ip::Ipv6(*pdu), nodes),
             Ipv6::Icmp(icmp_pdu) => visit_icmp_pdu(&icmp_pdu, &Ip::Ipv6(*pdu), nodes),
@@ -278,7 +285,7 @@ fn visit_tcp_pdu(pdu: &TcpPdu, ip_pdu: &Ip, mut nodes: VecDeque<xml::Node>) -> R
     assert_eq!(pdu.checksum()?.to_be_bytes(), descendant_value(&node, "tcp", "checksum", 2)?.as_slice());
     if descendant_show(&node, "tcp", "checksum.status", 1)?.eq(&[0x01]) {
         assert_eq!(
-            pdu.computed_checksum(&ip_pdu)?.to_be_bytes(),
+            pdu.computed_checksum(ip_pdu)?.to_be_bytes(),
             descendant_value(&node, "tcp", "checksum", 2)?.as_slice()
         );
     }
@@ -380,7 +387,7 @@ fn visit_udp_pdu(pdu: &UdpPdu, ip_pdu: &Ip, mut nodes: VecDeque<xml::Node>) -> R
     assert_eq!(pdu.checksum()?.to_be_bytes(), descendant_value(&node, "udp", "checksum", 2)?.as_slice());
     if descendant_show(&node, "udp", "checksum.status", 1)?.eq(&[0x01]) {
         assert_eq!(
-            pdu.computed_checksum(&ip_pdu)?.to_be_bytes(),
+            pdu.computed_checksum(ip_pdu)?.to_be_bytes(),
             descendant_value(&node, "udp", "checksum", 2)?.as_slice()
         );
     }
@@ -405,7 +412,7 @@ fn visit_icmp_pdu(pdu: &IcmpPdu, ip_pdu: &Ip, mut nodes: VecDeque<xml::Node>) ->
     assert_eq!(pdu.checksum()?.to_be_bytes(), descendant_value(&node, proto, "checksum", 2)?.as_slice());
     if descendant_show(&node, proto, "checksum.status", 1)?.eq(&[0x01]) {
         assert_eq!(
-            pdu.computed_checksum(&ip_pdu)?.to_be_bytes(),
+            pdu.computed_checksum(ip_pdu)?.to_be_bytes(),
             descendant_value(&node, proto, "checksum", 2)?.as_slice()
         );
     }
@@ -446,7 +453,10 @@ fn visit_gre_pdu(pdu: &GrePdu, mut nodes: VecDeque<xml::Node>) -> Result<(), Box
 
     match pdu.inner() {
         Ok(gre) => match gre {
-            Gre::Raw(raw) => Ok(assert_eq!(&pdu.buffer()[pdu.computed_ihl()..], raw)),
+            Gre::Raw(raw) => {
+                assert_eq!(&pdu.buffer()[pdu.computed_ihl()..], raw);
+                Ok(())
+            }
             Gre::Ethernet(ethernet_pdu) => visit_ethernet_pdu(&ethernet_pdu, nodes),
             Gre::Ipv4(ipv4_pdu) => visit_ipv4_pdu(&ipv4_pdu, nodes),
             Gre::Ipv6(ipv6_pdu) => visit_ipv6_pdu(&ipv6_pdu, nodes),
@@ -522,7 +532,7 @@ fn test_pcaps() -> Result<(), Box<dyn Error>> {
             eprintln!("{} (#{})", &pcap_file, i + 1);
             let first_layer = dissections.front().unwrap().attribute("name");
             if first_layer == Some("eth") {
-                match EthernetPdu::new(&data) {
+                match EthernetPdu::new(data) {
                     Ok(ethernet_pdu) => match visit_ethernet_pdu(&ethernet_pdu, dissections) {
                         Ok(()) => {}
                         Err(e) => {
@@ -536,7 +546,7 @@ fn test_pcaps() -> Result<(), Box<dyn Error>> {
                     }
                 }
             } else if first_layer == Some("ip") || first_layer == Some("ipv6") {
-                match Ip::new(&data) {
+                match Ip::new(data) {
                     Ok(Ip::Ipv4(ipv4_pdu)) => match visit_ipv4_pdu(&ipv4_pdu, dissections) {
                         Ok(()) => {}
                         Err(e) => {

@@ -73,7 +73,7 @@ impl<'a> EthernetPdu<'a> {
 
     /// Returns the slice of the underlying buffer that contains the header part of this PDU
     pub fn as_bytes(&'a self) -> &'a [u8] {
-        self.clone().into_bytes()
+        (*self).into_bytes()
     }
 
     /// Consumes this object and returns the slice of the underlying buffer that contains the header part of this PDU
@@ -83,7 +83,7 @@ impl<'a> EthernetPdu<'a> {
 
     /// Returns an object representing the inner payload of this PDU
     pub fn inner(&'a self) -> Result<Ethernet<'a>> {
-        self.clone().into_inner()
+        (*self).into_inner()
     }
 
     /// Consumes this object and returns an object representing the inner payload of this PDU
@@ -106,13 +106,13 @@ impl<'a> EthernetPdu<'a> {
 
     pub fn source_address(&'a self) -> Result<[u8; 6]> {
         let mut source_address = [0u8; 6];
-        source_address.copy_from_slice(&util::read_slice(self.buffer, 6, 12)?);
+        source_address.copy_from_slice(util::read_slice(self.buffer, 6, 12)?);
         Ok(source_address)
     }
 
     pub fn destination_address(&'a self) -> Result<[u8; 6]> {
         let mut destination_address = [0u8; 6];
-        destination_address.copy_from_slice(&util::read_slice(self.buffer, 0, 6)?);
+        destination_address.copy_from_slice(util::read_slice(self.buffer, 0, 6)?);
         Ok(destination_address)
     }
 

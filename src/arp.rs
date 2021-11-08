@@ -58,7 +58,7 @@ impl<'a> ArpPdu<'a> {
 
     /// Returns the slice of the underlying buffer that contains this PDU
     pub fn as_bytes(&'a self) -> Result<&'a [u8]> {
-        self.clone().into_bytes()
+        (*self).into_bytes()
     }
 
     /// Consumes this object and returns the slice of the underlying buffer that contains this PDU
@@ -88,25 +88,25 @@ impl<'a> ArpPdu<'a> {
 
     pub fn sender_hardware_address(&'a self) -> Result<[u8; 6]> {
         let mut sender_hardware_address = [0u8; 6];
-        sender_hardware_address.copy_from_slice(&util::read_slice(self.buffer, 8, 14)?);
+        sender_hardware_address.copy_from_slice(util::read_slice(self.buffer, 8, 14)?);
         Ok(sender_hardware_address)
     }
 
     pub fn sender_protocol_address(&'a self) -> Result<[u8; 4]> {
         let mut sender_protocol_address = [0u8; 4];
-        sender_protocol_address.copy_from_slice(&util::read_slice(self.buffer, 14, 18)?);
+        sender_protocol_address.copy_from_slice(util::read_slice(self.buffer, 14, 18)?);
         Ok(sender_protocol_address)
     }
 
     pub fn target_hardware_address(&'a self) -> Result<[u8; 6]> {
         let mut target_hardware_address = [0u8; 6];
-        target_hardware_address.copy_from_slice(&util::read_slice(self.buffer, 18, 24)?);
+        target_hardware_address.copy_from_slice(util::read_slice(self.buffer, 18, 24)?);
         Ok(target_hardware_address)
     }
 
     pub fn target_protocol_address(&'a self) -> Result<[u8; 4]> {
         let mut target_protocol_address = [0u8; 4];
-        target_protocol_address.copy_from_slice(&util::read_slice(self.buffer, 24, 28)?);
+        target_protocol_address.copy_from_slice(util::read_slice(self.buffer, 24, 28)?);
         Ok(target_protocol_address)
     }
 }

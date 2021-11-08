@@ -94,7 +94,7 @@ impl<'a> Ipv4Pdu<'a> {
 
     /// Returns the slice of the underlying buffer that contains the header part of this PDU
     pub fn as_bytes(&'a self) -> &'a [u8] {
-        self.clone().into_bytes()
+        (*self).into_bytes()
     }
 
     /// Consumes this object and returns the slice of the underlying buffer that contains the header part of this PDU
@@ -104,7 +104,7 @@ impl<'a> Ipv4Pdu<'a> {
 
     /// Returns an object representing the inner payload of this PDU
     pub fn inner(&'a self) -> Result<Ipv4<'a>> {
-        self.clone().into_inner()
+        (*self).into_inner()
     }
 
     /// Consumes this object and returns an object representing the inner payload of this PDU
@@ -160,17 +160,17 @@ impl<'a> Ipv4Pdu<'a> {
 
     pub fn dont_fragment(&'a self) -> bool {
         if let Ok(data) = util::read_u8(self.buffer, 6) {
-            return (data & 0x40) != 0;
+            (data & 0x40) != 0
         } else {
-            return false;
+            false
         }
     }
 
     pub fn more_fragments(&'a self) -> bool {
         if let Ok(data) = util::read_u8(self.buffer, 6) {
-            return (data & 0x20) != 0;
+            (data & 0x20) != 0
         } else {
-            return false;
+            false
         }
     }
 
@@ -205,18 +205,18 @@ impl<'a> Ipv4Pdu<'a> {
 
     pub fn source_address(&'a self) -> Result<[u8; 4]> {
         let mut source_address = [0u8; 4];
-        source_address.copy_from_slice(&util::read_slice(self.buffer, 12, 16)?);
+        source_address.copy_from_slice(util::read_slice(self.buffer, 12, 16)?);
         Ok(source_address)
     }
 
     pub fn destination_address(&'a self) -> Result<[u8; 4]> {
         let mut destination_address = [0u8; 4];
-        destination_address.copy_from_slice(&util::read_slice(self.buffer, 16, 20)?);
+        destination_address.copy_from_slice(util::read_slice(self.buffer, 16, 20)?);
         Ok(destination_address)
     }
 
     pub fn options(&'a self) -> Ipv4OptionIterator<'a> {
-        Ipv4OptionIterator { buffer: &self.buffer, pos: 20, ihl: self.computed_ihl().unwrap() }
+        Ipv4OptionIterator { buffer: self.buffer, pos: 20, ihl: self.computed_ihl().unwrap() }
     }
 }
 
@@ -321,7 +321,7 @@ impl<'a> Ipv6Pdu<'a> {
 
     /// Returns the slice of the underlying buffer that contains the header part of this PDU
     pub fn as_bytes(&'a self) -> &'a [u8] {
-        self.clone().into_bytes()
+        (*self).into_bytes()
     }
 
     /// Consumes this object and returns the slice of the underlying buffer that contains the header part of this PDU
@@ -331,7 +331,7 @@ impl<'a> Ipv6Pdu<'a> {
 
     /// Returns an object representing the inner payload of this PDU
     pub fn inner(&'a self) -> Result<Ipv6<'a>> {
-        self.clone().into_inner()
+        (*self).into_inner()
     }
 
     /// Consumes this object and returns an object representing the inner payload of this PDU
@@ -439,13 +439,13 @@ impl<'a> Ipv6Pdu<'a> {
 
     pub fn source_address(&'a self) -> Result<[u8; 16]> {
         let mut source_address = [0u8; 16];
-        source_address.copy_from_slice(&util::read_slice(self.buffer, 8, 24)?);
+        source_address.copy_from_slice(util::read_slice(self.buffer, 8, 24)?);
         Ok(source_address)
     }
 
     pub fn destination_address(&'a self) -> Result<[u8; 16]> {
         let mut destination_address = [0u8; 16];
-        destination_address.copy_from_slice(&util::read_slice(self.buffer, 24, 40)?);
+        destination_address.copy_from_slice(util::read_slice(self.buffer, 24, 40)?);
         Ok(destination_address)
     }
 

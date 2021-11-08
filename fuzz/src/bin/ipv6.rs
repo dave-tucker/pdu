@@ -19,41 +19,38 @@
 use pdu::*;
 
 pub fn fuzz(data: &[u8]) {
-    match Ipv6Pdu::new(&data) {
-        Ok(ipv6_pdu) => {
-            ipv6_pdu.version().unwrap();
-            ipv6_pdu.dscp().unwrap();
-            ipv6_pdu.ecn().unwrap();
-            ipv6_pdu.flow_label().unwrap();
-            ipv6_pdu.payload_length().unwrap();
-            ipv6_pdu.next_header().unwrap();
-            ipv6_pdu.computed_ihl().unwrap();
-            ipv6_pdu.computed_protocol().unwrap();
-            ipv6_pdu.computed_identification();
-            ipv6_pdu.computed_more_fragments();
-            ipv6_pdu.computed_fragment_offset();
-            ipv6_pdu.hop_limit().unwrap();
-            ipv6_pdu.source_address().unwrap();
-            ipv6_pdu.destination_address().unwrap();
-            for extension_header in ipv6_pdu.extension_headers() {
-                match extension_header {
-                    Ipv6ExtensionHeader::Raw { .. } => {
-                        continue;
-                    }
-                    Ipv6ExtensionHeader::Fragment { .. } => {
-                        continue;
-                    }
+    if let Ok(ipv6_pdu) = Ipv6Pdu::new(data) {
+        ipv6_pdu.version().unwrap();
+        ipv6_pdu.dscp().unwrap();
+        ipv6_pdu.ecn().unwrap();
+        ipv6_pdu.flow_label().unwrap();
+        ipv6_pdu.payload_length().unwrap();
+        ipv6_pdu.next_header().unwrap();
+        ipv6_pdu.computed_ihl().unwrap();
+        ipv6_pdu.computed_protocol().unwrap();
+        ipv6_pdu.computed_identification();
+        ipv6_pdu.computed_more_fragments();
+        ipv6_pdu.computed_fragment_offset();
+        ipv6_pdu.hop_limit().unwrap();
+        ipv6_pdu.source_address().unwrap();
+        ipv6_pdu.destination_address().unwrap();
+        for extension_header in ipv6_pdu.extension_headers() {
+            match extension_header {
+                Ipv6ExtensionHeader::Raw { .. } => {
+                    continue;
+                }
+                Ipv6ExtensionHeader::Fragment { .. } => {
+                    continue;
                 }
             }
         }
-        Err(_) => {}
     }
 }
 
 fn main() {
     loop {
         honggfuzz::fuzz!(|data: &[u8]| {
-            fuzz(&data);
+            fuzz(data);
         });
     }
 }
