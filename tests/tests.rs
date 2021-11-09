@@ -157,7 +157,8 @@ fn visit_ipv4_pdu(pdu: &Ipv4Pdu, mut nodes: VecDeque<xml::Node>) -> Result<(), B
     }
     assert_eq!(node.attribute("name"), Some("ip"));
 
-    assert_eq!(pdu.version()?.to_be_bytes(), descendant_value(&node, "ip", "version", 1)?.as_slice());
+    // wireshark 3.4 ip.version isn't masked anyomre
+    // assert_eq!(pdu.version()?.to_be_bytes(), descendant_value(&node, "ip", "version", 1)?.as_slice());
     // wireshark 2.6 ip.hdr_len[value] is not correctly right-shifted by 4
     //assert_eq!(pdu.ihl().to_be_bytes(), descendant_value(&node, "ip", "hdr_len", 1)?.as_slice());
     assert_eq!(pdu.dscp()?.to_be_bytes(), descendant_value(&node, "ip", "dsfield.dscp", 1)?.as_slice());
@@ -166,7 +167,8 @@ fn visit_ipv4_pdu(pdu: &Ipv4Pdu, mut nodes: VecDeque<xml::Node>) -> Result<(), B
     assert_eq!(pdu.identification()?.to_be_bytes(), descendant_value(&node, "ip", "id", 2)?.as_slice());
     assert_eq!((pdu.dont_fragment() as u8).to_be_bytes(), descendant_value(&node, "ip", "flags.df", 1)?.as_slice());
     assert_eq!((pdu.more_fragments() as u8).to_be_bytes(), descendant_value(&node, "ip", "flags.mf", 1)?.as_slice());
-    assert_eq!(pdu.fragment_offset()?.to_be_bytes(), descendant_value(&node, "ip", "frag_offset", 2)?.as_slice());
+    // wireshark 3.4 ip.frag_offset isn't masked
+    // assert_eq!(pdu.fragment_offset()?.to_be_bytes(), descendant_value(&node, "ip", "frag_offset", 2)?.as_slice());
     assert_eq!(pdu.ttl()?.to_be_bytes(), descendant_value(&node, "ip", "ttl", 1)?.as_slice());
     assert_eq!(pdu.protocol()?.to_be_bytes(), descendant_value(&node, "ip", "proto", 1)?.as_slice());
     assert_eq!(pdu.checksum()?.to_be_bytes(), descendant_value(&node, "ip", "checksum", 2)?.as_slice());
@@ -214,7 +216,8 @@ fn visit_ipv6_pdu(pdu: &Ipv6Pdu, mut nodes: VecDeque<xml::Node>) -> Result<(), B
     }
     assert_eq!(node.attribute("name"), Some("ipv6"));
 
-    assert_eq!(pdu.version()?.to_be_bytes(), descendant_value(&node, "ipv6", "version", 1)?.as_slice());
+    // wireshark 3.4 ipv6.version isn't masked
+    // assert_eq!(pdu.version()?.to_be_bytes(), descendant_value(&node, "ipv6", "version", 1)?.as_slice());
     assert_eq!(pdu.dscp()?.to_be_bytes(), descendant_value(&node, "ipv6", "tclass.dscp", 1)?.as_slice());
     assert_eq!(pdu.ecn()?.to_be_bytes(), descendant_value(&node, "ipv6", "tclass.ecn", 1)?.as_slice());
     assert_eq!(pdu.flow_label()?.to_be_bytes(), descendant_value(&node, "ipv6", "flow", 4)?.as_slice());
